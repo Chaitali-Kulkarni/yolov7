@@ -6,6 +6,7 @@ import cv2
 import torch
 import torch.backends.cudnn as cudnn
 from numpy import random
+import numpy as np
 
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
@@ -67,13 +68,15 @@ def detect(save_img=False):
     old_img_b = 1
 
     t0 = time.time()
+    m=0
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
-
+        trans_img1 = np.zeros((1080,1920, 4), np.uint8)
+        trans_img2 = np.zeros((1080,1920, 4), np.uint8)
         # Warmup
         if device.type != 'cpu' and (old_img_b != img.shape[0] or old_img_h != img.shape[2] or old_img_w != img.shape[3]):
             old_img_b = img.shape[0]
@@ -95,7 +98,7 @@ def detect(save_img=False):
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
-
+        
         # Process detections
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
@@ -116,6 +119,7 @@ def detect(save_img=False):
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
+                
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
                     if save_txt:  # Write to file
@@ -124,13 +128,26 @@ def detect(save_img=False):
                         with open(txt_path + '.txt', 'a') as f:
                             f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
+                    print(colors)
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
-
+                        a=colors[int(cls)]
+                        if(len(a)==3):
+                          a.append(255)
+                        plot_one_box(xyxy, trans_img1, label=label, color=a, line_thickness=1)
+                        plot_one_box(xyxy, trans_img2, color=a, line_thickness=1)
+                        
+                        
+                with open('/content/labels.txt','a') as g:
+                    g.write("Frame"+str(frame)+":"+s+'\n')
             # Print time (inference + NMS)
-            print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
-
+            print(f'{s}Done!!. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
+            image_name="/content/drive/MyDrive/transparent_images/output"+"trans"+str(m)+".png"
+            cv2.imwrite(image_name,trans_img2)
+            image_name="/content/drive/MyDrive/transparent_images/output"+"trans_label_"+str(m)+".png"
+            cv2.imwrite(image_name,trans_img1)
+            m=m+1
             # Stream results
             if view_img:
                 cv2.imshow(str(p), im0)
